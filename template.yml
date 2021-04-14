@@ -203,16 +203,17 @@ Resources:
   ParquetCrawler:
     Type: AWS::Glue::Crawler
     Properties:
+      Configuration: '{"Version":1.0,"CrawlerOutput":{"Partitions":{"AddOrUpdateBehavior":"InheritFromTable"}}}'
       Description: discovers partitions in cloudtrail raw data
       Role: !GetAtt GlueCrawlerRole.Arn
       DatabaseName: !Ref CloudTrailDatabase
       Targets:
         S3Targets:
-          - Path: !Sub "s3://${ParquetS3Bucket}/parquet/"
+          - Path: !Sub "s3://${ParquetS3Bucket}/cloudtrail/"
       TablePrefix: pqt
       SchemaChangePolicy:
         DeleteBehavior: DEPRECATE_IN_DATABASE
-        UpdateBehavior: UPDATE_IN_DATABASE
+        UpdateBehavior: LOG
   Workflow:
     Type: AWS::Glue::Workflow
     Properties:
@@ -311,7 +312,7 @@ Resources:
       Runtime: python3.8
       Environment:
         Variables:
-          TABLE_NAME: "pqt-cloudtrail"
+          TABLE_NAME: "pqtcloudtrail"
           WORKGROUP: !Ref AthenaWorkgroup
           OUTPUT_BUCKET: !Ref AthenaResultsBucket
           DATABASE: !Ref CloudTrailDatabase

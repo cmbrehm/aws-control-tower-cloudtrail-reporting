@@ -10,8 +10,8 @@ WORKGROUP = os.environ.get('WORKGROUP')
 def lambda_handler(event, context):
     t = datetime.date.today() - datetime.timedelta(days=1)
     query = (
-        f'SELECT distinct useridentity.principalid, eventsource, eventname, recipientaccountid '
-        f'FROM {DATABASE}.{TABLE} where '
+        f'SELECT distinct "useridentity.principalid", eventsource, eventname, recipientaccountid '
+        f'FROM "{TABLE}" where '
         f"year='{t.year}' and month='{str(t.month).zfill(2)}' and day='{str(t.day).zfill(2)}' "
         f"and eventname like 'Create%';"
     );
