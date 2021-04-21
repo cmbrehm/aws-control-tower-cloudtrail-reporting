@@ -25,6 +25,10 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub athena-query-results-${AWS::StackName}-${AWS::AccountId}-${AWS::Region}
+  GlueTempBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub glue-temp-${AWS::StackName}-${AWS::AccountId}-${AWS::Region}
   AthenaWorkgroup:
     Type: AWS::Athena::WorkGroup
     Properties:
@@ -163,6 +167,7 @@ Resources:
                   - s3:DeleteObject
                 Resource:
                   - !Sub "${ParquetS3Bucket.Arn}/*"
+                  - !Sub "${GlueTempBucket.Arn}/*"
   GlueCrawler:
     Type: AWS::Glue::Crawler
     Properties:
@@ -191,6 +196,8 @@ Resources:
           "--destbucket": !Ref ParquetS3Bucket
           "--database": !Ref CloudTrailDatabase
           "--srctable": !Ref RawTable
+          "--tempdir": !Sub "s3://${GlueTempBucket.DomainName}/temp/"
+          "--enable-metrics": ""
         ExecutionProperty:
           MaxConcurrentRuns: 1
         GlueVersion: '2.0'

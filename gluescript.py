@@ -6,7 +6,7 @@ from awsglue.context import GlueContext
 from awsglue.job import Job
 
 ## @params: [JOB_NAME]
-args = getResolvedOptions(sys.argv, ['JOB_NAME', 'destbucket', 'database', 'srctable'])
+args = getResolvedOptions(sys.argv, ['JOB_NAME', 'destbucket', 'database', 'srctable','tempdir'])
 sc = SparkContext()
 glueContext = GlueContext(sc)
 spark = glueContext.spark_session
@@ -25,11 +25,12 @@ applymapping1 = ApplyMapping.apply(frame = datasource0, mappings = [("eventversi
 ## @args: [staging_path = "<staging_path>", name = "<name>", transformation_ctx = "<transformation_ctx>"]
 ## @return: <output>
 ## @inputs: [frame = <frame>]
-relationalize0 = Relationalize.apply(frame = applymapping1, staging_path="s3://"+args["destbucket"]+"/tmp/", name="dfcroot", transformation_ctx="relationalize0")
+relationalize0 = Relationalize.apply(frame = applymapping1, name="dfcroot", staging_path=args["tempdir"], transformation_ctx="relationalize0")
 relationalize1 = relationalize0.select("dfcroot")
+relationalize2=relationalize1.coalesce(10)
 ## @type: DataSink
 ## @args: [connection_type = "s3", connection_options = {"path": "s3://cloudtrail-parquet-123443713593-us-east-1"}, format = "parquet", transformation_ctx = "datasink4"]
 ## @return: datasink4
 ## @inputs: [frame = dropnullfields3]
-datasink4 = glueContext.write_dynamic_frame.from_options(frame = relationalize1, connection_type = "s3", connection_options = {"path": "s3://"+args["destbucket"]+"/cloudtrail/", "partitionKeys":["year","month","day"]}, format = "parquet", transformation_ctx = "datasink4")
+datasink4 = glueContext.write_dynamic_frame.from_options(frame = relationalize2, connection_type = "s3", connection_options = {"path": "s3://"+args["destbucket"]+"/cloudtrail/", "partitionKeys":["year","month","day"]}, format = "parquet", transformation_ctx = "datasink4")
 job.commit()
