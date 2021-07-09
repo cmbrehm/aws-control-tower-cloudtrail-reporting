@@ -1,15 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Creates Glue stuff to process CloudTrail logs consolidated by AWS Control Tower into a queryable table
 Transform: AWS::Serverless-2016-10-31
-Parameters:
-  S3BucketName:
-    Description: name of the S3 bucket that CT uses to consolidate cloudtrail logs
-    Type: String
-    AllowedPattern: aws\-controltower\-logs\-\d{12}.+
-  S3LogsUrl:
-    Description: log url to the cloudtrail logs, should look like this `s3://aws-controltower-logs-123443123456-us-east-1/o-s45wxfxxxx/AWSLogs/`
-    Type: String
-    AllowedPattern: s3:\/\/aws\-controltower\-logs\-\d{12}.+\/o-[a-z0-9]{10}\/AWSLogs\/
 Resources:
   ParquetS3Bucket:
     Type: AWS::S3::Bucket
@@ -45,97 +36,6 @@ Resources:
       DatabaseInput:
         Description: tables for auditing against consolidated CloudTrail
         Name: cloudtrail-db
-  RawTable:
-    Type: AWS::Glue::Table
-    Properties:
-      CatalogId: !Ref AWS::AccountId
-      DatabaseName: !Ref CloudTrailDatabase
-      TableInput:
-        Name: raw-cloudtrail-logs
-        Description: JSON cloudtrail logs
-        Parameters:
-          classification: cloudtrail
-          compressionType: gzip
-          exclusions: !Sub '["${S3LogsUrl}**/Config/**","${S3LogsUrl}**/CloudTrail-Digest/**"]'
-          jsonPath: $.Records[*]
-        PartitionKeys:
-        - Name: accountid
-          Type: string
-        - Name: logtype
-          Type: string
-        - Name: region
-          Type: string
-        - Name: year
-          Type: string
-        - Name: month
-          Type: string
-        - Name: day
-          Type: string
-        Retention: 0
-        StorageDescriptor:
-          Columns:
-          - Name: eventversion
-            Type: string
-          - Name: useridentity
-            Type: struct<type:string,principalId:string,arn:string,accountId:string,accessKeyId:string,sessionContext:struct<sessionIssuer:struct<type:string,principalId:string,arn:string,accountId:string,userName:string>,webIdFederationData:string,attributes:struct<mfaAuthenticated:string,creationDate:string>,ec2RoleDelivery:string>,invokedBy:string,userName:string,identityProvider:string>
-          - Name: eventtime
-            Type: string
-          - Name: eventsource
-            Type: string
-          - Name: eventname
-            Type: string
-          - Name: awsregion
-            Type: string
-          - Name: sourceipaddress
-            Type: string
-          - Name: useragent
-            Type: string
-          - Name: requestparameters
-            Type: string
-          - Name: responseelements
-            Type: string
-          - Name: requestid
-            Type: string
-          - Name: eventid
-            Type: string
-          - Name: eventtype
-            Type: string
-          - Name: recipientaccountid
-            Type: string
-          - Name: errorcode
-            Type: string
-          - Name: errormessage
-            Type: string
-          - Name: resources
-            Type: array<struct<accountId:string,type:string,ARN:string>>
-          - Name: sharedeventid
-            Type: string
-          - Name: apiversion
-            Type: string
-          - Name: readonly
-            Type: boolean
-          - Name: managementevent
-            Type: boolean
-          - Name: eventcategory
-            Type: string
-          - Name: additionaleventdata
-            Type: string
-          - Name: vpcendpointid
-            Type: string
-          - Name: serviceeventdetails
-            Type: string
-          Compressed: false
-          InputFormat: org.apache.hadoop.mapred.TextInputFormat
-          Location: !Ref S3LogsUrl
-          NumberOfBuckets: 0
-          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
-          SerdeInfo:
-            Parameters:
-              paths: additionaleventdata,apiversion,awsregion,errorcode,errormessage,eventcategory,eventid,eventname,eventsource,eventtime,eventtype,eventversion,managementevent,readonly,recipientaccountid,requestid,requestparameters,resources,responseelements,serviceeventdetails,sharedeventid,sourceipaddress,useragent,useridentity,vpcendpointid
-            SerializationLibrary: org.openx.data.jsonserde.JsonSerDe
-          SortColumns: []
-          StoredAsSubDirectories: false
-        TableType: EXTERNAL_TABLE
   GlueCrawlerRole:
     Type: AWS::IAM::Role
     Properties:
@@ -158,7 +58,7 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource:
-                  - !Sub "arn:aws:s3:::${S3BucketName}/*"
+                  - !Sub "arn:aws:s3:::aws-controltower-logs-${AWS::AccountId}-${AWS::Region}/*"
                   - !Sub "arn:aws:s3:::sam-cli-bucket-${AWS::AccountId}-${AWS::Region}/*"
               - Effect: Allow
                 Action:
@@ -168,22 +68,6 @@ Resources:
                 Resource:
                   - !Sub "${ParquetS3Bucket.Arn}/*"
                   - !Sub "${GlueTempBucket.Arn}/*"
-  GlueCrawler:
-    Type: AWS::Glue::Crawler
-    Properties:
-      Description: discovers partitions in cloudtrail raw data
-      Role: !GetAtt GlueCrawlerRole.Arn
-      DatabaseName: !Ref CloudTrailDatabase
-      Configuration: '{"Version":1.0,"Grouping":{"TableGroupingPolicy":"CombineCompatibleSchemas"}}'
-      Targets:
-        CatalogTargets:
-        - DatabaseName: !Ref CloudTrailDatabase
-          Tables:
-          - !Ref RawTable
-      TablePrefix: raw
-      SchemaChangePolicy:
-        DeleteBehavior: LOG
-        UpdateBehavior: LOG
   GlueJsonToParquetJob:
     Type: AWS::Glue::Job
     Properties:
@@ -192,12 +76,9 @@ Resources:
           PythonVersion: '3'
           ScriptLocation: ./gluescript.py
         DefaultArguments:
-          "--job-bookmark-option": job-bookmark-enable
-          "--destbucket": !Ref ParquetS3Bucket
-          "--database": !Ref CloudTrailDatabase
-          "--srctable": !Ref RawTable
-          "--tempdir": !Sub "s3://${GlueTempBucket.DomainName}/temp/"
-          "--enable-metrics": ""
+          "--src_bucket": !Sub "aws-controltower-logs-${AWS::AccountId}-${AWS::Region}"
+          "--dest_bucket": !Ref ParquetS3Bucket
+          "--temp_bucket": !Sub "s3://${GlueTempBucket.DomainName}/temp/"
         ExecutionProperty:
           MaxConcurrentRuns: 1
         GlueVersion: '2.0'
@@ -230,28 +111,12 @@ Resources:
     Type: AWS::Glue::Trigger
     Properties:
       Actions:
-      - CrawlerName: !Ref GlueCrawler
+      - JobName: !Ref GlueJsonToParquetJob
       Description: Early Morning
       Name: nightly-run-new
       Schedule: cron(33 7 * * ? *)
       StartOnCreation: true
       Type: SCHEDULED
-      WorkflowName: !Ref Workflow
-  AfterCrawlTrigger1:
-    Type: AWS::Glue::Trigger
-    Properties:
-      Actions:
-      - JobName: !Ref GlueJsonToParquetJob
-      Description: after finish
-      Name: after-json-crawl
-      StartOnCreation: true
-      Predicate:
-        Conditions:
-        - CrawlState: SUCCEEDED
-          CrawlerName: !Ref GlueCrawler
-          LogicalOperator: EQUALS
-        Logical: ANY
-      Type: CONDITIONAL
       WorkflowName: !Ref Workflow
   AfterCrawlTrigger2:
     Type: AWS::Glue::Trigger
