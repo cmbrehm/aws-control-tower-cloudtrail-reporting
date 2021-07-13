@@ -76,9 +76,9 @@ Resources:
           PythonVersion: '3'
           ScriptLocation: ./gluescript.py
         DefaultArguments:
-          "--src_bucket": !Sub "aws-controltower-logs-${AWS::AccountId}-${AWS::Region}"
+          "--source_bucket": !Sub "aws-controltower-logs-${AWS::AccountId}-${AWS::Region}"
           "--dest_bucket": !Ref ParquetS3Bucket
-          "--temp_bucket": !Sub "s3://${GlueTempBucket.DomainName}/temp/"
+          "--TempDir": !Sub "s3://${GlueTempBucket.DomainName}/temp/"
         ExecutionProperty:
           MaxConcurrentRuns: 1
         GlueVersion: '2.0'

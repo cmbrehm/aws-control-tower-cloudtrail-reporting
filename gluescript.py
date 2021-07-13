@@ -10,26 +10,15 @@ import boto3
 import datetime
 
 glueContext = GlueContext(SparkContext.getOrCreate())
+args = getResolvedOptions(sys.argv, ['JOB_NAME','source_bucket','TempDir','dest_bucket'])
+sourceBucket = args.get('source_bucket')
+tempBucketUrl = args.get('TempDir')
+destBucket = args.get('dest_bucket')
+yesterday = datetime.datetime.now()-datetime.timedelta(days=1)
+sourceDate = yesterday.strftime("%Y/%m/%d/")
+
 job = Job(glueContext)
 job.init(args['JOB_NAME'], args)
-
-try:
-   args = getResolvedOptions(sys.argv, ['source_bucket','temp_bucket','dest_bucket'])
-except:
-    args = {'source_bucket':'aws-controltower-logs-222243713593-us-east-1','temp_bucket':'glue-temp-aam-glue-222243713593-us-east-1','dest_bucket':'temp-dev-ctjob-brehmcla'}
-
-
-sourceBucket = args.get('source_bucket')
-tempBucket = args.get('temp_bucket')
-destBucket = args.get('dest_bucket')
-
-try:
-    args = getResolvedOptions(sys.argv, ['source_date'])
-except:
-    yesterday=datetime.datetime.now()-datetime.timedelta(days=1)
-    args = {'source_date': yesterday.strftime("%Y/%m/%d/")}
-
-sourceDate = args.get('source_date')
 
 s3client=boto3.client('s3')
 
@@ -56,7 +45,7 @@ data = glueContext.create_dynamic_frame.from_options(connection_type='s3', forma
 
 applymapping1 = ApplyMapping.apply(frame = data, mappings = [("eventversion", "string", "eventversion", "string"), ("useridentity", "struct", "useridentity", "struct"), ("eventtime", "string", "eventtime", "string"), ("eventsource", "string", "eventsource", "string"), ("eventname", "string", "eventname", "string"), ("awsregion", "string", "awsregion", "string"), ("sourceipaddress", "string", "sourceipaddress", "string"), ("useragent", "string", "useragent", "string"), ("requestid", "string", "requestid", "string"), ("eventid", "string", "eventid", "string"), ("eventtype", "string", "eventtype", "string"), ("recipientaccountid", "string", "recipientaccountid", "string"), ("errorcode", "string", "errorcode", "string"), ("errormessage", "string", "errormessage", "string"), ("sharedeventid", "string", "sharedeventid", "string"), ("apiversion", "string", "apiversion", "string"), ("readonly", "boolean", "readonly", "boolean"), ("managementevent", "boolean", "managementevent", "boolean"), ("eventcategory", "string", "eventcategory", "string"), ("vpcendpointid", "string", "vpcendpointid", "string"), ("year", "string", "year", "string"), ("month", "string", "month", "string"), ("day", "string", "day", "string")], transformation_ctx = "applymapping1")
 # crush the struct mapping down.
-relationalize0 = Relationalize.apply(frame = applymapping1, name="dfcroot", staging_path="s3://{}/temp/".format(tempBucket), transformation_ctx="relationalize0")
+relationalize0 = Relationalize.apply(frame = applymapping1, name="dfcroot", staging_path=tempBucketUrl, transformation_ctx="relationalize0")
 relationalize1 = relationalize0.select("dfcroot")
 
 #add the partition info back in
