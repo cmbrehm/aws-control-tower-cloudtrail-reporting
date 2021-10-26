@@ -51,7 +51,8 @@ relationalize1 = relationalize0.select("dfcroot")
 #add the partition info back in
 sourceDtArr = sourceDate.split('/')
 relationalize11 = relationalize1.toDF().select('*',lit(sourceDtArr[0]).alias("year"),lit(sourceDtArr[1]).alias("month"),lit(sourceDtArr[2]).alias("day"))
-relationalize2= DynamicFrame.fromDF(relationalize11, glueContext,"relationalize2")
+relationalize12 = relationalize11.coalesce(10)
+relationalize2= DynamicFrame.fromDF(relationalize12, glueContext,"relationalize2")
 
 #write
 glueContext.write_dynamic_frame.from_options(frame = relationalize2, connection_type = "s3", connection_options = {"path": "s3://"+destBucket+"/cloudtrail/", "partitionKeys":["year","month","day"]}, format = "parquet", transformation_ctx = "datasink4")
